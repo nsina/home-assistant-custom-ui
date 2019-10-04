@@ -1,5 +1,45 @@
 ## Changelog
 
+#### 2019-05-18
+*   Hotfix for HA 0.94+
+
+#### 2019-03-24
+*   Fix for `icon-color` for HA 0.88+
+*   Fox config panel for HA 0.90+
+
+#### 2019-01-13
+*   Hotfix for `extra_badge` for HA 0.85+
+
+#### 2018-12-17
+*   Hotfix for HA 0.84.1+
+
+#### 2018-08-31
+*   Fix for icon_color not being applied on HA >0.77 (by Jérôme)
+*   This version requires HA 0.77+
+
+#### 2018-08-06
+*   Fix CustomUI attributes not being hidden in more-info
+
+#### 2018-07-13
+*   Hotfix for HA 0.73+
+
+#### 2018-06-25
+*   Entities with `hide_in_default_view: false` will no longer be hidden from
+    default view even if they are part of another view with
+    `hide_in_default_view: true`.
+*   Add `icon_color`, `state`, and `_stateDisplay` to the list of hidden attributes.
+
+#### 2018-06-02
+*   Hotfix for HA 0.71+
+*   Restore handling custom attributes in form and more-info.
+
+#### 2018-05-28
+*   New feature: [`control_element`](docs/features.md#custom-controls)
+*   Fix theming on Firefix/Edge.
+
+#### 2018-05-21
+*   Hotfix release for HA 0.70+
+
 #### 2018-04-29
 *   Add support for `action_name` attribute that can be used to change the displayed action on scene and script cards.
 *   Make confirmable controls protect slider on 2nd line

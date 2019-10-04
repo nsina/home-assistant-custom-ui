@@ -3,6 +3,11 @@
 TODO: Add screenshots
 
 ## Notes
+**CustomUI 2019-05-18 required for HA 0.94+**
+
+**CustomUI 2018-12-17 required for HA 0.84.1+**
+
+**CustomUI 2018-08-06 is the last version to work on HA 0.76 and earlier**
 
 Please fill the [usage poll](https://docs.google.com/forms/d/e/1FAIpQLSdjgb4iu5aDyvFB6ch9KJpRn25I0wLL7NLyTIhcWCzU3KM1-w/viewform?usp=send_form)
 
@@ -20,11 +25,15 @@ Please ask questions and post feature requests in the [forum](https://community.
 
 ## Changelog
 
-#### 2018-04-29
-*   Add support for `action_name` attribute that can be used to change the displayed action on scene and script cards.
-*   Make confirmable controls protect slider on 2nd line
+#### 2019-05-18
+*   Hotfix for HA 0.94+
 
-#### 2018-04-27
-*   Add support for `icon_color` attribute to force-set icon color of any entity.
+#### 2019-03-24
+*   Fix for `icon-color` for HA 0.88+
+*   Fox config panel for HA 0.90+
+
+#### 2019-01-13
+*   Hotfix for `extra_badge` for HA 0.85+
+
 
 [Full Changelog](CHANGELOG.md)

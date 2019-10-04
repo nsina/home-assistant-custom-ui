@@ -1,51 +1,63 @@
-<link rel="import" href="hooks.html">
+import { LitElement, html } from 'lit-element';
+import '../utils/hooks.js';
 
-<dom-module id="ha-config-custom-ui">
-  <template>
+/**
+ * @extends HTMLElement
+ */
+class HaConfigCustomUi extends LitElement {
+  render() {
+    return html`
     <style include="ha-style"></style>
     <app-header-layout has-scrolling-region>
       <app-header slot="header" fixed>
         <app-toolbar>
           <paper-icon-button
-            icon='mdi:arrow-left'
-            on-click='_backHandler'
+            icon='hass:arrow-left'
+            @click="${this._backHandler}"
           ></paper-icon-button>
           <div main-title>Custom UI settings</div>
         </app-toolbar>
       </app-header>
 
-      <ha-config-section is-wide='[[isWide]]'>
+      <ha-config-section .is-wide="${this.isWide}">
         <paper-card heading='Device name'>
           <div class='card-content'>
             Set device name so that you can reference it in per-device settings
             <paper-input
               label='Name'
-              value='{{name}}'
+              .value="@{this.name}"
             ></paper-input>
           </div>
         </paper-card>
       </ha-config-section>
     </app-header-layout>
-  </template>
-</dom-module>
-
-<script>
-class HaConfigCustomUi extends window.hassMixins.EventsMixin(Polymer.Element) {
-  static get is() { return 'ha-config-custom-ui'; }
+    `;
+  }
 
   static get properties() {
     return {
-      isWide: Boolean,
+      isWide: {
+        type: Boolean,
+        attribute: 'is-wide',
+      },
 
       name: {
         type: String,
+        reflect: true,
         observer: 'nameChanged',
       },
     };
   }
 
-  ready() {
-    super.ready();
+  attributeChangedCallback(name, oldval, newval) {
+    if (name === 'name') {
+      this.nameChanged(newval);
+    }
+    super.attributeChangedCallback(name, oldval, newval);
+  }
+
+  connectedCallback() {
+    super.connectedCallback();
     this.name = window.customUI.getName();
   }
 
@@ -55,8 +67,8 @@ class HaConfigCustomUi extends window.hassMixins.EventsMixin(Polymer.Element) {
 
   _backHandler() {
     window.history.back();
-    this.fire('location-changed');
+    const event = new CustomEvent('location-changed');
+    this.dispatchEvent(event);
   }
 }
-customElements.define(HaConfigCustomUi.is, HaConfigCustomUi);
-</script>
+customElements.define('ha-config-custom-ui', HaConfigCustomUi);

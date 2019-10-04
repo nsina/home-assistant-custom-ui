@@ -1,4 +1,11 @@
-<script>
+import applyThemesOnElement from '../../home-assistant-polymer/src/common/dom/apply_themes_on_element.ts';
+import computeStateDomain from '../../home-assistant-polymer/src/common/entity/compute_state_domain.ts';
+import getViewEntities from '../../home-assistant-polymer/src/common/entity/get_view_entities.ts';
+
+import '../elements/ha-config-custom-ui.js';
+import VERSION from './version.js';
+import './hass-attribute-util.js';
+
 window.customUI = window.customUI || {
   SUPPORTED_SLIDER_MODES: [
     'single-line', 'break-slider', 'break-slider-toggle', 'hide-slider', 'no-slider',
@@ -36,7 +43,7 @@ window.customUI = window.customUI || {
             if (element.groupEntity) {
               elem._context.push(element.groupEntity.entity_id);
             } else if (element.groupEntity === false && element.states && element.states.length) {
-              elem._context.push(`group.${window.hassUtil.computeDomain(element.states[0])}`);
+              elem._context.push(`group.${computeStateDomain(element.states[0])}`);
             }
             break;
           case 'MORE-INFO-GROUP':
@@ -237,31 +244,6 @@ window.customUI = window.customUI || {
     });
   },
 
-  showVersion() {
-    if (window.location.pathname !== '/dev-info') return;
-    const devInfo = window.customUI.getElementHierarchy(document, [
-      'home-assistant',
-      'home-assistant-main',
-      'partial-panel-resolver',
-      'ha-panel-dev-info']);
-    if (devInfo === null) {
-      // DOM not ready. Wait 1 second.
-      window.setTimeout(window.customUI.showVersion, 1000);
-      return;
-    }
-    if (devInfo.hass && devInfo.hass.config && devInfo.hass.config.core &&
-        devInfo.hass.config.core.version &&
-        devInfo.hass.config.core.version.split('.')[1] > 65) {
-      // 0.66 introduced proper display if customui versions.
-      return;
-    }
-    const about = window.customUI.lightOrShadow(devInfo, '.about');
-    const secondP = about.querySelectorAll('p')[1];
-    const version = document.createElement('p');
-    version.textContent = `Custom UI ${window.customUI.VERSION}`;
-    about.insertBefore(version, secondP);
-  },
-
   controlColumns(columns) {
     const partialCards = window.customUI.getElementHierarchy(document, [
       'home-assistant',
@@ -274,15 +256,17 @@ window.customUI = window.customUI || {
         1000);
       return;
     }
+    // Function renamed from handleWindowChange to _updateColumns on 3.7.18
+    const f = partialCards.handleWindowChange || partialCards._updateColumns;
     partialCards.mqls.forEach((mql) => {
-      mql.removeListener(partialCards.handleWindowChange);
+      mql.removeListener(f);
     });
     partialCards.mqls = columns.map((width) => {
       const mql = window.matchMedia(`(min-width: ${width}px)`);
-      mql.addListener(partialCards.handleWindowChange);
+      mql.addListener(f);
       return mql;
     });
-    partialCards.handleWindowChange();
+    f();
   },
 
   useCustomizer() {
@@ -292,13 +276,8 @@ window.customUI = window.customUI || {
     if (customizer.attributes.columns) {
       window.customUI.controlColumns(customizer.attributes.columns);
     }
-
     if (customizer.attributes.hide_attributes) {
-      if (window.hassUtil.LOGIC_STATE_ATTRIBUTES) {
-        Array.prototype.push.apply(
-          window.hassUtil.LOGIC_STATE_ATTRIBUTES, customizer.attributes.hide_attributes);
-      }
-      if (window.hassAttributeUtil.LOGIC_STATE_ATTRIBUTES) {
+      if (window.hassAttributeUtil && window.hassAttributeUtil.LOGIC_STATE_ATTRIBUTES) {
         customizer.attributes.hide_attributes.forEach((attr) => {
           if (!Object.prototype.hasOwnProperty.call(
             window.hassAttributeUtil.LOGIC_STATE_ATTRIBUTES, attr)) {
@@ -306,41 +285,6 @@ window.customUI = window.customUI || {
           }
         });
       }
-    }
-  },
-
-  updateAttributes() {
-    const customUiAttributes = {
-      group: undefined,
-      device: undefined,
-      templates: undefined,
-      state_card_mode: {
-        type: 'array',
-        options: {
-          light: window.customUI.SUPPORTED_SLIDER_MODES.concat('badges'),
-          cover: window.customUI.SUPPORTED_SLIDER_MODES.concat('badges'),
-          '*': ['badges'],
-        },
-      },
-      state_card_custom_ui_secondary: { type: 'string' },
-      badges_list: { type: 'json' },
-      show_last_changed: { type: 'boolean' },
-      hide_control: { type: 'boolean' },
-      extra_data_template: { type: 'string' },
-      extra_badge: { type: 'json' },
-      stretch_slider: { type: 'boolean' },
-      slider_theme: { type: 'json' },
-      theme: { type: 'string' },
-      confirm_controls: { type: 'boolean' },
-      confirm_controls_show_lock: { type: 'boolean' },
-      hide_in_default_view: { type: 'boolean' },
-    };
-    if (window.hassUtil.LOGIC_STATE_ATTRIBUTES) {
-      Array.prototype.push.apply(
-        window.hassUtil.LOGIC_STATE_ATTRIBUTES, Object.keys(customUiAttributes));
-    }
-    if (window.hassAttributeUtil.LOGIC_STATE_ATTRIBUTES) {
-      Object.assign(window.hassAttributeUtil.LOGIC_STATE_ATTRIBUTES, customUiAttributes);
     }
   },
 
@@ -400,7 +344,7 @@ window.customUI = window.customUI || {
           }
         });
       }
-    } else {
+    } else if (haPanelConfig.shadowRoot) {
       const root = haPanelConfig.shadowRoot || haPanelConfig;
       if (root.lastElementChild.tagName !== 'HA-CONFIG-CUSTOM-UI') {
         const haConfigCustomUi = getHaConfigCustomUi();
@@ -408,125 +352,226 @@ window.customUI = window.customUI || {
       }
       const visible = window.location.pathname.startsWith('/config/customui');
       root.lastElementChild.style.display = visible ? '' : 'none';
+    } else if (haPanelConfig.routerOptions && haPanelConfig.routerOptions.routes) {
+      if (!haPanelConfig.routerOptions.routes.customui) {
+        haPanelConfig.routerOptions.routes.customui = {
+          tag: 'ha-config-custom-ui',
+          load: () => Promise.resolve(),
+        };
+        // CustomUI panel is the entrypoint, so we need to reload the page.
+        if (window.location.pathname.startsWith('/config/customui')) {
+          haPanelConfig.update(new Map([['route', undefined]]));
+        }
+      }
     }
   },
 
   installStatesHook() {
-    const homeAssistant = customElements.get('home-assistant');
-    if (!homeAssistant || !homeAssistant.prototype._updateHass) return;
-    const originalUpdate = homeAssistant.prototype._updateHass;
-    homeAssistant.prototype._updateHass = function update(obj) {
-      // Use named function to preserve 'this'.
-      const { hass } = this;
-      if (obj.states) {
-        Object.keys(obj.states).forEach((key) => {
-          const entity = obj.states[key];
-          if (entity._cui_keep) return;
-          const newEntity = window.customUI.maybeApplyTemplates(hass, obj.states, entity);
-          if (hass.states && entity !== hass.states[key]) {
-            // New state arrived. Put modified state in.
-            obj.states[key] = newEntity;
-          } else if (entity !== newEntity) {
-            // It's the same state but contents changed due to other state changes.
-            obj.states[key] = newEntity;
-          }
-        });
+    customElements.whenDefined('home-assistant').then(() => {
+      const homeAssistant = customElements.get('home-assistant');
+      if (!homeAssistant || !homeAssistant.prototype._updateHass) return;
+      const originalUpdate = homeAssistant.prototype._updateHass;
+      homeAssistant.prototype._updateHass = function update(obj) {
+        // Use named function to preserve 'this'.
+        const { hass } = this;
+        if (obj.states) {
+          Object.keys(obj.states).forEach((key) => {
+            const entity = obj.states[key];
+            if (entity._cui_keep) return;
+            const newEntity = window.customUI.maybeApplyTemplates(hass, obj.states, entity);
+            if (hass.states && entity !== hass.states[key]) {
+              // New state arrived. Put modified state in.
+              obj.states[key] = newEntity;
+            } else if (entity !== newEntity) {
+              // It's the same state but contents changed due to other state changes.
+              obj.states[key] = newEntity;
+            }
+          });
+        }
+        originalUpdate.call(this, obj);
+        if (obj.themes && hass._themeWaiters) {
+          hass._themeWaiters.forEach(waiter => waiter.stateChanged(waiter.state));
+          hass._themeWaiters = undefined;
+        }
+      };
+      const main = window.customUI.lightOrShadow(document, 'home-assistant');
+      if (main.hass && main.hass.states) {
+        main._updateHass({ states: main.hass.states });
       }
-      originalUpdate.call(this, obj);
-      if (obj.themes && hass._themeWaiters) {
-        hass._themeWaiters.forEach(waiter => waiter.stateChanged(waiter.state));
-        hass._themeWaiters = undefined;
-      }
-    };
-    const main = window.customUI.lightOrShadow(document, 'home-assistant');
-    if (main.hass && main.hass.states) {
-      main._updateHass({ states: main.hass.states });
-    }
+    });
   },
 
   installPartialCards() {
-    const partialCards = customElements.get('partial-cards');
-    if (!partialCards || !partialCards.prototype._defaultViewFilter) return;
-    partialCards.prototype._defaultViewFilter = (hass, entityId) => {
-      if (hass.states[entityId].attributes.hidden) return false;
-      const excludes = {};
-      Object.values(hass.states).forEach((entity) => {
-        if (entity.attributes && entity.attributes.hide_in_default_view) {
-          const excludeEntityId = entity.entity_id;
-          if (excludes[excludeEntityId]) return;
-          excludes[excludeEntityId] = entity;
-          if (entity.attributes.view) {
-            Object.assign(
-              excludes, window.HAWS.getViewEntities(hass.states, entity));
+    customElements.whenDefined('partial-cards').then(() => {
+      const partialCards = customElements.get('partial-cards');
+      if (!partialCards || !partialCards.prototype._defaultViewFilter) return;
+      partialCards.prototype._defaultViewFilter = (hass, entityId) => {
+        if (hass.states[entityId].attributes.hidden) return false;
+        const excludes = {};
+        Object.values(hass.states).forEach((entity) => {
+          if (entity.attributes && entity.attributes.hide_in_default_view) {
+            const excludeEntityId = entity.entity_id;
+            if (excludes[excludeEntityId]) return;
+            excludes[excludeEntityId] = entity;
+            if (entity.attributes.view) {
+              const viewEntities = getViewEntities(hass.states, entity);
+              Object.keys(viewEntities)
+                .filter(
+                  id => viewEntities[id].attributes.hide_in_default_view !== false)
+                .forEach((id) => {
+                  excludes[id] = viewEntities[id];
+                });
+            }
           }
-        }
-      });
-      return !excludes[entityId];
-    };
+        });
+        return !excludes[entityId];
+      };
+    });
   },
 
   // Allows changing the 'Execute' / 'Activate' text on script/scene cards.
   installActionName(elementName) {
-    const klass = customElements.get(elementName);
-    if (!klass || !klass.prototype) return;
-    Object.defineProperty(klass.prototype, 'localize', {
-      get() {
-        function customLocalize(v) {
-          if (this.stateObj && this.stateObj.attributes &&
-              this.stateObj.attributes.action_name) {
-            return this.stateObj.attributes.action_name;
+    customElements.whenDefined(elementName).then(() => {
+      const klass = customElements.get(elementName);
+      if (!klass || !klass.prototype) return;
+      Object.defineProperty(klass.prototype, 'localize', {
+        get() {
+          function customLocalize(v) {
+            if (this.stateObj && this.stateObj.attributes &&
+                this.stateObj.attributes.action_name) {
+              return this.stateObj.attributes.action_name;
+            }
+            return this.__data.localize(v);
           }
-          return this.__data.localize(v);
-        }
-        return customLocalize;
-      },
-      set() {},
+          return customLocalize;
+        },
+        set() {},
+      });
     });
   },
 
   // Allows theming "regular" top badges.
   installHaStateLabelBadge() {
-    const haStateLabelBadge = customElements.get('ha-state-label-badge');
-    if (!haStateLabelBadge || !haStateLabelBadge.prototype.stateChanged) return;
-    // Use named function to preserve 'this'.
-    haStateLabelBadge.prototype.stateChanged = function update(stateObj) {
-      // TODO: Call window.customUI.maybeChangeObject
-      if (stateObj.attributes.theme) {
-        if (this.hass.themes === null) {
-          this.hass._themeWaiters = this.hass._themeWaiters || [];
-          this.hass._themeWaiters.push(this);
-        } else {
-          window.hassUtil.applyThemesOnElement(
-            this,
-            this.hass.themes || { default_theme: 'default', themes: {} },
-            stateObj.attributes.theme || 'default');
+    customElements.whenDefined('ha-state-label-badge').then(() => {
+      const haStateLabelBadge = customElements.get('ha-state-label-badge');
+      if (!haStateLabelBadge || !haStateLabelBadge.prototype.stateChanged) return;
+      // Use named function to preserve 'this'.
+      haStateLabelBadge.prototype.stateChanged = function update(stateObj) {
+        // TODO: Call window.customUI.maybeChangeObject
+        if (stateObj.attributes.theme) {
+          if (this.hass.themes === null) {
+            this.hass._themeWaiters = this.hass._themeWaiters || [];
+            this.hass._themeWaiters.push(this);
+          } else {
+            applyThemesOnElement(
+              this,
+              this.hass.themes || { default_theme: 'default', themes: {} },
+              stateObj.attributes.theme || 'default');
+          }
         }
-      }
-      this.updateStyles();
-      if (this.startInterval) {
-        // Added on 19.1.2018
-        this.startInterval(stateObj);
-      }
-    };
+        this.updateStyles();
+        if (this.startInterval) {
+          // Added on 19.1.2018
+          this.startInterval(stateObj);
+        }
+      };
+    });
   },
 
   installStateBadge() {
-    const stateBadge = customElements.get('state-badge');
-    if (!stateBadge || !stateBadge.prototype.updateIconAppearance) return;
-    const originalUpdateIconAppearance = stateBadge.prototype.updateIconAppearance;
-    // Use named function to preserve 'this'.
-    stateBadge.prototype.updateIconAppearance = function customUpdateIconAppearance(stateObj) {
-      if (stateObj.attributes.icon_color && !stateObj.attributes.entity_picture) {
-        this.style.backgroundImage = '';
-        Object.assign(this.$.icon.style, {
-          display: 'inline',
-          color: stateObj.attributes.icon_color,
-          filter: '',
-        });
-      } else {
-        originalUpdateIconAppearance.call(this, stateObj);
+    customElements.whenDefined('state-badge').then(() => {
+      const stateBadge = customElements.get('state-badge');
+      if (!stateBadge) return;
+      if (stateBadge.prototype._updateIconAppearance) {
+        const originalUpdateIconAppearance = stateBadge.prototype._updateIconAppearance;
+        // Use named function to preserve 'this'.
+        stateBadge.prototype._updateIconAppearance = function customUpdateIconAppearance(stateObj) {
+          if (stateObj.attributes.icon_color && !stateObj.attributes.entity_picture) {
+            this.style.backgroundImage = '';
+            Object.assign(this.$.icon.style, {
+              color: stateObj.attributes.icon_color,
+              filter: '',
+            });
+          } else {
+            originalUpdateIconAppearance.call(this, stateObj);
+          }
+        };
+      } else if (stateBadge.prototype.updated) {
+        const originalUpdated = stateBadge.prototype.updated;
+        // Use named function to preserve 'this'.
+        stateBadge.prototype.updated = function customUpdated(changedProps) {
+          if (!changedProps.has('stateObj')) return;
+          const { stateObj } = this;
+          if (stateObj.attributes.icon_color && !stateObj.attributes.entity_picture) {
+            this.style.backgroundImage = '';
+            Object.assign(this._icon.style, {
+              color: stateObj.attributes.icon_color,
+              filter: '',
+            });
+          } else {
+            originalUpdated.call(this, changedProps);
+          }
+        };
       }
-    };
+    });
+  },
+
+  installHaAttributes() {
+    customElements.whenDefined('ha-attributes').then(() => {
+      const haAttributes = customElements.get('ha-attributes');
+      if (!haAttributes || !haAttributes.prototype.computeFiltersArray ||
+         !window.hassAttributeUtil) return;
+      // Use named function to preserve 'this'.
+      haAttributes.prototype.computeFiltersArray =
+        function customComputeFiltersArray(extraFilters) {
+          return Object.keys(window.hassAttributeUtil.LOGIC_STATE_ATTRIBUTES).concat(
+            extraFilters ? extraFilters.split(',') : []);
+        };
+    });
+  },
+
+  installHaFormCustomize() {
+    if (!window.location.pathname.startsWith('/config')) return;
+    customElements.whenDefined('ha-form-customize').then(() => {
+      const haFormCustomize = customElements.get('ha-form-customize');
+      if (!haFormCustomize) {
+        // DOM not ready. Wait 100ms.
+        window.setTimeout(window.customUI.installHaFormCustomize, 100);
+        return;
+      }
+      if (window.customUI.haFormCustomizeInitDone) return;
+      window.customUI.haFormCustomizeInitDone = true;
+
+      if (!window.hassAttributeUtil) return;
+      if (haFormCustomize.prototype._computeSingleAttribute) {
+        // Use named function to preserve 'this'.
+        haFormCustomize.prototype._computeSingleAttribute =
+          function customComputeSingleAttribute(key, value, secondary) {
+            const config = window.hassAttributeUtil.LOGIC_STATE_ATTRIBUTES[key]
+                || { type: window.hassAttributeUtil.UNKNOWN_TYPE };
+            return this._initOpenObject(key, config.type === 'json' ? JSON.stringify(value) : value, secondary, config);
+          };
+      }
+      if (haFormCustomize.prototype.getNewAttributesOptions) {
+        // Use named function to preserve 'this'.
+        haFormCustomize.prototype.getNewAttributesOptions =
+          function customgetNewAttributesOptions(
+            localAttributes, globalAttributes, existingAttributes, newAttributes) {
+            const knownKeys =
+                Object.keys(window.hassAttributeUtil.LOGIC_STATE_ATTRIBUTES)
+                  .filter((key) => {
+                    const conf = window.hassAttributeUtil.LOGIC_STATE_ATTRIBUTES[key];
+                    return conf && (!conf.domains || !this.entity ||
+                                      conf.domains.includes(computeStateDomain(this.entity)));
+                  })
+                  .filter(this.filterFromAttributes(localAttributes))
+                  .filter(this.filterFromAttributes(globalAttributes))
+                  .filter(this.filterFromAttributes(existingAttributes))
+                  .filter(this.filterFromAttributes(newAttributes));
+            return knownKeys.sort().concat('Other');
+          };
+      }
+    });
   },
 
   installClassHooks() {
@@ -536,6 +581,7 @@ window.customUI = window.customUI || {
     window.customUI.installStatesHook();
     window.customUI.installHaStateLabelBadge();
     window.customUI.installStateBadge();
+    window.customUI.installHaAttributes();
     window.customUI.installActionName('state-card-scene');
     window.customUI.installActionName('state-card-script');
   },
@@ -556,23 +602,22 @@ window.customUI = window.customUI || {
     window.customUI.runHooks();
     window.addEventListener('location-changed', window.setTimeout.bind(null, window.customUI.runHooks, 100));
     /* eslint-disable no-console */
-    console.log(`Loaded CustomUI ${window.customUI.VERSION}`);
+    console.log(`Loaded CustomUI ${VERSION}`);
     /* eslint-enable no-console */
     if (!window.CUSTOM_UI_LIST) {
       window.CUSTOM_UI_LIST = [];
     }
     window.CUSTOM_UI_LIST.push({
       name: 'CustomUI',
-      version: window.customUI.VERSION,
+      version: VERSION,
       url: 'https://github.com/andrey-git/home-assistant-custom-ui',
     });
   },
 
   runHooks() {
     window.customUI.fixGroupTitles();
-    window.customUI.showVersion();
-    window.customUI.updateAttributes();
     window.customUI.updateConfigPanel();
+    window.customUI.installHaFormCustomize();
   },
 
   getName() {
@@ -602,8 +647,4 @@ window.customUI = window.customUI || {
     }
   },
 };
-</script>
-<link rel="import" href="version.html">
-<script>
 window.customUI.init();
-</script>
